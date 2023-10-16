@@ -13,7 +13,7 @@ jobs:
       - name: Remove unwanted files
         run:  |
               rm -rvf "$(pwd)/.git"
-              rm -rvf "$(pwd)/.github/workflows/ci.yml"
+              rm -rvf "$(pwd)/.github/workflows/propagate.yml"
       - name: Pushes to bobabeam-config-service repository
         id: push_directory
         uses: cpina/github-action-push-to-another-repository@ssh-deploy-key
