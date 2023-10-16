@@ -1,0 +1,29 @@
+name: Publish to Other repositories
+
+on:
+  push:
+    branches:
+      - sandbox
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove unwanted files
+        run:  |
+              rm -rvf "$(pwd)/.git"
+              rm -rvf "$(pwd)/.github/workflows/ci.yml"
+      - name: Pushes to bobabeam-config-service repository
+        id: push_directory
+        uses: cpina/github-action-push-to-another-repository@ssh-deploy-key
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.BOBABEAM_CONFIG_SERVICE_WORKFLOW_DEPLOY_KEY }}
+        with:
+          source-directory: .
+          destination-github-username: 'protofire'
+          destination-repository-name: 'bobabeam-config-service'
+          user-name: ${{ github.event.pusher.name }}
+          user-email: ${{ github.event.pusher.email }}
+          commit-message: ${{ github.event.head_commit.message }}
+          target-branch: ${{ github.ref_name }}
