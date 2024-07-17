@@ -146,11 +146,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.0.0
+        uses: docker/setup-qemu-action@v3.1.0
         with:
           platforms: arm64
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.3.0
+        uses: docker/setup-buildx-action@v3.4.0
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
@@ -165,7 +165,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v6.0.0
+        uses: docker/build-push-action@v6.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -194,11 +194,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3.0.0
+        uses: docker/setup-qemu-action@v3.1.0
         with:
           platforms: arm64
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.3.0
+        uses: docker/setup-buildx-action@v3.4.0
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
@@ -213,7 +213,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v6.0.0
+        uses: docker/build-push-action@v6.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
