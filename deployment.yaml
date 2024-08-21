@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: '1'
+  labels:
+    app: rootstock-config-service
+  name: rootstock-config-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rootstock-config-service
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: rootstock-config-service
+    spec:
+      containers:
+        - image: sovryn/rootstock-config-service
+          imagePullPolicy: Always
+          envFrom:
+          - secretRef:
+              name: rootstock-config-service
+          - secretRef:
+              name: rootstock-config-service-secret
+          name: web
+          resources:
+            requests:
+              memory: "2048Mi"
+              cpu: "200m"
+            limits:
+              memory: "2048Mi"
+              cpu: "400m"
+          ports:
+          - containerPort: 8000
+            protocol: TCP
+          tty: true
+          volumeMounts:
+            - mountPath: /nginx
+              name: nginx-shared
+        - image: nginx:1.20-alpine
+          name: nginx
+          envFrom:
+          - secretRef:
+              name: rootstock-config-service
+          - secretRef:
+              name: rootstock-config-service-secret
+          ports:
+            - containerPort: 80
+          resources: {}
+          volumeMounts:
+            - name: nginxconf
+              mountPath: /etc/nginx/templates
+            - mountPath: /nginx
+              name: nginx-shared
+      restartPolicy: Always
+      volumes:
+        - name: nginx-shared
+          emptyDir: {}
+        - name: nginxconf
+          secret:
+            secretName: rootstock-config-service-nginx
+      imagePullSecrets:
+        - name: regcred
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rootstock-config-service
+spec:
+  selector:
+    app: rootstock-config-service
+  ports:
+    - port: 443
+      targetPort: 80
+  type: NodePort
