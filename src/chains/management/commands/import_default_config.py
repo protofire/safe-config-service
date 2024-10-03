@@ -9,13 +9,13 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
-from dotenv import load_dotenv
+#from dotenv import load_dotenv
 
 from chains.models import Chain, Feature as ChainFeature, Wallet
 from safe_apps.models import SafeApp, Tag, Feature as SafeAppFeature, validate_safe_app_icon_size
 import requests
 
-load_dotenv()
+#load_dotenv()
 
 class Command(BaseCommand):
     help = "Import chains, features, wallets and safeApps"
