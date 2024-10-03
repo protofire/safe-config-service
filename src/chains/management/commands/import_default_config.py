@@ -50,9 +50,9 @@ class Command(BaseCommand):
 
         print('Chains to import:', default_chain_ids)
         import_flags = {
-            'features': os.getenv('IMPORT_FEATURES', '1').lower() == '1',
-            'wallets': os.getenv('IMPORT_WALLETS', '1').lower() == '1',
-            'safe_apps': os.getenv('IMPORT_SAFE_APPS', '1').lower() == '1',
+            'features': os.getenv('IMPORT_FEATURES', '0').lower() == '1',
+            'wallets': os.getenv('IMPORT_WALLETS', '0').lower() == '1',
+            'safe_apps': os.getenv('IMPORT_SAFE_APPS', '0').lower() == '1',
             'chains': bool(default_chain_ids),
         }
 
