@@ -16,6 +16,7 @@ from safe_apps.models import SafeApp, Tag, Feature as SafeAppFeature, validate_s
 import requests
 
 #load_dotenv()
+config_url = os.getenv('CONFIG_URL', 'https://raw.githubusercontent.com/protofire/safe-configs/refs/heads/main/')
 
 class Command(BaseCommand):
     help = "Import chains, features, wallets and safeApps"
@@ -29,7 +30,6 @@ class Command(BaseCommand):
                 return json.load(f)
 
     def handle(self, *args: Any, **options: Any) -> None:
-        config_url = os.getenv('CONFIG_URL', 'https://raw.githubusercontent.com/protofire/safe-configs/refs/heads/main/')
         is_url = config_url.startswith(('http://', 'https://'))
         join_path = urljoin if is_url else os.path.join
 
@@ -40,7 +40,7 @@ class Command(BaseCommand):
             'chains': join_path(config_url, 'configs/chains.json'),
         }
 
-        default_chain_ids_raw = os.getenv('DEFAULT_CHAIN_IDS', '59144,56')
+        default_chain_ids_raw = os.getenv('DEFAULT_CHAIN_IDS', 'ALL')
         if default_chain_ids_raw.upper() == 'ALL':
             # Load all chain IDs from chains.json
             chains_data = self.load_json_data(files['chains'])
@@ -129,7 +129,8 @@ class Command(BaseCommand):
     def _handle_icon_upload(self, safe_app: SafeApp, app_data: dict) -> None:
         if 'iconUrl' in app_data:
             try:
-                response = requests.get(app_data['iconUrl'], timeout=10)
+                full_image_url = f"{config_url}{app_data['iconUrl']}"
+                response = requests.get(full_image_url, timeout=10)
                 response.raise_for_status()
                 icon_content = ContentFile(response.content)
                 icon_name = f"{safe_app.app_id}.png"
@@ -245,7 +246,6 @@ class Command(BaseCommand):
             self._upload_image(chain, "currency_logo_uri", chain_data["nativeCurrency"]["logoUri"], f"currency_logo_{chain.id}.png")
 
     def _upload_image(self, obj: Any, field_name: str, image_url: str, file_name: str) -> None:
-        config_url = os.getenv('CONFIG_URL', 'https://raw.githubusercontent.com/protofire/safe-configs/refs/heads/main/')
         full_image_url = f"{config_url}{image_url}"
         response = requests.get(full_image_url)
         if response.status_code == 200:
