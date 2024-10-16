@@ -91,6 +91,18 @@ class BalancesProviderSerializer(serializers.Serializer[Chain]):
     enabled = serializers.BooleanField(source="balances_provider_enabled")
 
 
+class ContractAddressesSerializer(serializers.Serializer[Chain]):
+    safe_singleton_address = serializers.CharField()
+    safe_proxy_factory_address = serializers.CharField()
+    multi_send_address = serializers.CharField()
+    multi_send_call_only_address = serializers.CharField()
+    fallback_handler_address = serializers.CharField()
+    sign_message_lib_address = serializers.CharField()
+    create_call_address = serializers.CharField()
+    simulate_tx_accessor_address = serializers.CharField()
+    safe_web_authn_signer_factory_address = serializers.CharField()
+
+
 class BaseRpcUriSerializer(serializers.Serializer[Chain]):
     authentication = serializers.SerializerMethodField()
     value = serializers.SerializerMethodField(method_name="get_rpc_value")
@@ -134,6 +146,12 @@ class BlockExplorerUriTemplateSerializer(serializers.Serializer[Chain]):
     api = serializers.URLField(source="block_explorer_uri_api_template")
 
 
+class BeaconChainExplorerUriTemplateSerializer(serializers.Serializer[Chain]):
+    public_key = serializers.URLField(
+        source="beacon_chain_explorer_uri_public_key_template"
+    )
+
+
 class FeatureSerializer(serializers.ModelSerializer[Feature]):
     class Meta:
         fields = ["key"]
@@ -165,8 +183,10 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
     safe_apps_rpc_uri = serializers.SerializerMethodField()
     public_rpc_uri = serializers.SerializerMethodField()
     block_explorer_uri_template = serializers.SerializerMethodField()
+    beacon_chain_explorer_uri_template = serializers.SerializerMethodField()
     native_currency = serializers.SerializerMethodField()
     prices_provider = serializers.SerializerMethodField()
+    contract_addresses = serializers.SerializerMethodField()
     balances_provider = serializers.SerializerMethodField()
     transaction_service = serializers.URLField(
         source="transaction_service_uri", default=None
@@ -192,9 +212,11 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
             "safe_apps_rpc_uri",
             "public_rpc_uri",
             "block_explorer_uri_template",
+            "beacon_chain_explorer_uri_template",
             "native_currency",
             "prices_provider",
             "balances_provider",
+            "contract_addresses",
             "transaction_service",
             "vpc_transaction_service",
             "theme",
@@ -236,6 +258,11 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
     def get_block_explorer_uri_template(obj: Chain) -> ReturnDict[Any, Any]:
         return BlockExplorerUriTemplateSerializer(obj).data
 
+    @staticmethod
+    @swagger_serializer_method(serializer_or_field=BeaconChainExplorerUriTemplateSerializer)  # type: ignore[misc]
+    def get_beacon_chain_explorer_uri_template(obj: Chain) -> ReturnDict[Any, Any]:
+        return BeaconChainExplorerUriTemplateSerializer(obj).data
+
     @swagger_serializer_method(serializer_or_field=GasPriceSerializer)  # type: ignore[misc]
     def get_gas_price(self, instance: Chain) -> ReturnDict[Any, Any]:
         ranked_gas_prices = instance.gasprice_set.all().order_by("rank")
@@ -258,3 +285,7 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
     @swagger_serializer_method(serializer_or_field=BalancesProviderSerializer)  # type: ignore[misc]
     def get_balances_provider(self, instance: Chain) -> ReturnDict[Any, Any]:
         return BalancesProviderSerializer(instance).data
+
+    @swagger_serializer_method(serializer_or_field=ContractAddressesSerializer)  # type: ignore[misc]
+    def get_contract_addresses(self, instance: Chain) -> ReturnDict[Any, Any]:
+        return ContractAddressesSerializer(instance).data
