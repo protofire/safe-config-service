@@ -40,7 +40,7 @@ class Command(BaseCommand):
             'chains': join_path(config_url, 'configs/chains.json'),
         }
 
-        default_chain_ids_raw = os.getenv('DEFAULT_CHAIN_IDS', '')
+        default_chain_ids_raw = os.getenv('DEFAULT_CHAIN_IDS', '8453,81457,59144,10,5000,534352,60808,111188,25,1284,169,34443,13371,1329')
         if default_chain_ids_raw.upper() == 'ALL':
             # Load all chain IDs from chains.json
             chains_data = self.load_json_data(files['chains'])
@@ -50,9 +50,9 @@ class Command(BaseCommand):
 
         print('Chains to import:', default_chain_ids)
         import_flags = {
-            'features': os.getenv('IMPORT_FEATURES', '0').lower() == '1',
-            'wallets': os.getenv('IMPORT_WALLETS', '0').lower() == '1',
-            'safe_apps': os.getenv('IMPORT_SAFE_APPS', '0').lower() == '1',
+            'features': os.getenv('IMPORT_FEATURES', '1').lower() == '1',
+            'wallets': os.getenv('IMPORT_WALLETS', '1').lower() == '1',
+            'safe_apps': os.getenv('IMPORT_SAFE_APPS', '1').lower() == '1',
             'chains': bool(default_chain_ids),
         }
 
