@@ -34,6 +34,7 @@ class ChainFactory(DjangoModelFactory):  # type: ignore[misc]
     block_explorer_uri_address_template = factory.Faker("url")
     block_explorer_uri_tx_hash_template = factory.Faker("url")
     block_explorer_uri_api_template = factory.Faker("url")
+    beacon_chain_explorer_uri_public_key_template = factory.Faker("url")
     currency_name = factory.Faker("cryptocurrency_name")
     currency_symbol = factory.Faker("cryptocurrency_code")
     currency_decimals = factory.Faker("pyint")
@@ -51,6 +52,29 @@ class ChainFactory(DjangoModelFactory):  # type: ignore[misc]
     balances_provider_chain_name = factory.Faker("company")
     balances_provider_enabled = factory.Faker("pybool")
     hidden = False
+    safe_singleton_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
+    safe_proxy_factory_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
+    multi_send_address = factory.LazyAttribute(lambda o: web3.Account.create().address)
+    multi_send_call_only_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
+    fallback_handler_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
+    sign_message_lib_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
+    create_call_address = factory.LazyAttribute(lambda o: web3.Account.create().address)
+    simulate_tx_accessor_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
+    safe_web_authn_signer_factory_address = factory.LazyAttribute(
+        lambda o: web3.Account.create().address
+    )
 
 
 class GasPriceFactory(DjangoModelFactory):  # type: ignore[misc]

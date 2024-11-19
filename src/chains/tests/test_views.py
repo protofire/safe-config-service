@@ -60,6 +60,9 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
                         "txHash": chain.block_explorer_uri_tx_hash_template,
                         "api": chain.block_explorer_uri_api_template,
                     },
+                    "beaconChainExplorerUriTemplate": {
+                        "publicKey": chain.beacon_chain_explorer_uri_public_key_template,
+                    },
                     "nativeCurrency": {
                         "name": chain.currency_name,
                         "symbol": chain.currency_symbol,
@@ -90,6 +93,17 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
                     "recommendedMasterCopyVersion": chain.recommended_master_copy_version,
                     "disabledWallets": [],
                     "features": [],
+                    "contractAddresses": {
+                        "safeSingletonAddress": chain.safe_singleton_address,
+                        "safeProxyFactoryAddress": chain.safe_proxy_factory_address,
+                        "multiSendAddress": chain.multi_send_address,
+                        "multiSendCallOnlyAddress": chain.multi_send_call_only_address,
+                        "fallbackHandlerAddress": chain.fallback_handler_address,
+                        "signMessageLibAddress": chain.sign_message_lib_address,
+                        "createCallAddress": chain.create_call_address,
+                        "simulateTxAccessorAddress": chain.simulate_tx_accessor_address,
+                        "safeWebAuthnSignerFactoryAddress": chain.safe_web_authn_signer_factory_address,
+                    },
                 }
             ],
         }
@@ -103,21 +117,21 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
 
 class ChainPaginationViewTests(APITestCase):
     def test_pagination_next_page(self) -> None:
-        ChainFactory.create_batch(21)
+        ChainFactory.create_batch(41)
         url = reverse("v1:chains:list")
 
         response = self.client.get(path=url, data=None, format="json")
 
         self.assertEqual(response.status_code, 200)
         # number of items should be equal to the number of total items
-        self.assertEqual(response.json()["count"], 21)
+        self.assertEqual(response.json()["count"], 41)
         self.assertEqual(
             response.json()["next"],
-            "http://testserver/api/v1/chains/?limit=20&offset=20",
+            "http://testserver/api/v1/chains/?limit=40&offset=40",
         )
         self.assertEqual(response.json()["previous"], None)
         # returned items should be equal to max_limit
-        self.assertEqual(len(response.json()["results"]), 20)
+        self.assertEqual(len(response.json()["results"]), 40)
 
     def test_request_more_than_max_limit_should_return_max_limit(self) -> None:
         ChainFactory.create_batch(101)
@@ -131,25 +145,25 @@ class ChainPaginationViewTests(APITestCase):
         self.assertEqual(response.json()["count"], 101)
         self.assertEqual(
             response.json()["next"],
-            "http://testserver/api/v1/chains/?limit=20&offset=20",
+            "http://testserver/api/v1/chains/?limit=40&offset=40",
         )
         self.assertEqual(response.json()["previous"], None)
         # returned items should still be equal to max_limit
-        self.assertEqual(len(response.json()["results"]), 20)
+        self.assertEqual(len(response.json()["results"]), 40)
 
     def test_offset_greater_than_count(self) -> None:
-        ChainFactory.create_batch(21)
+        ChainFactory.create_batch(41)
         # requesting offset of number of chains
-        url = reverse("v1:chains:list") + f'{"?offset=21"}'
+        url = reverse("v1:chains:list") + f'{"?offset=41"}'
 
         response = self.client.get(path=url, data=None, format="json")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["count"], 21)
+        self.assertEqual(response.json()["count"], 41)
         self.assertEqual(response.json()["next"], None)
         self.assertEqual(
             response.json()["previous"],
-            "http://testserver/api/v1/chains/?limit=20&offset=1",
+            "http://testserver/api/v1/chains/?limit=40&offset=1",
         )
         # returned items should still be zero
         self.assertEqual(len(response.json()["results"]), 0)
@@ -187,6 +201,9 @@ class ChainDetailViewTests(APITestCase):
                 "txHash": chain.block_explorer_uri_tx_hash_template,
                 "api": chain.block_explorer_uri_api_template,
             },
+            "beaconChainExplorerUriTemplate": {
+                "publicKey": chain.beacon_chain_explorer_uri_public_key_template,
+            },
             "nativeCurrency": {
                 "name": chain.currency_name,
                 "symbol": chain.currency_symbol,
@@ -217,6 +234,17 @@ class ChainDetailViewTests(APITestCase):
             "recommendedMasterCopyVersion": chain.recommended_master_copy_version,
             "disabledWallets": [],
             "features": [],
+            "contractAddresses": {
+                "safeSingletonAddress": chain.safe_singleton_address,
+                "safeProxyFactoryAddress": chain.safe_proxy_factory_address,
+                "multiSendAddress": chain.multi_send_address,
+                "multiSendCallOnlyAddress": chain.multi_send_call_only_address,
+                "fallbackHandlerAddress": chain.fallback_handler_address,
+                "signMessageLibAddress": chain.sign_message_lib_address,
+                "createCallAddress": chain.create_call_address,
+                "simulateTxAccessorAddress": chain.simulate_tx_accessor_address,
+                "safeWebAuthnSignerFactoryAddress": chain.safe_web_authn_signer_factory_address,
+            },
         }
 
         response = self.client.get(path=url, data=None, format="json")
