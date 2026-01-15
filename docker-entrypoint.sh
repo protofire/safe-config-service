@@ -12,5 +12,14 @@ python src/manage.py migrate --noinput
 #echo "==> $(date +%H:%M:%S) ==> Importing default config..."
 #python src/manage.py import_default_config
 
+echo "==> $(date +%H:%M:%S) ==> Importing wallets..."..."
+python src/manage.py import_default_values --wallets test,test_2
+
+echo "==> $(date +%H:%M:%S) ==> Importing feature flags..."..."
+python src/manage.py import_default_values --feature-flags TEST,TEST_2
+
+echo "==> $(date +%H:%M:%S) ==> Importing tags for safe apps..."
+python src/manage.py import_tags --tags te_st,te_st_2
+
 echo "==> $(date +%H:%M:%S) ==> Running Gunicorn..."
 exec gunicorn -c /app/src/config/gunicorn.py config.wsgi -b ${GUNICORN_BIND_SOCKET} -b 0.0.0.0:${GUNICORN_BIND_PORT} --chdir /app/src/
