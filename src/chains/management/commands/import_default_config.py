@@ -69,26 +69,26 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Import completed successfully"))
 
-    def import_features(self, features_file: str, *args) -> None:
+    def import_features(self, features_file: str, *args: Any) -> None:
         try:
             features_data = self.load_json_data(features_file)
             existing_features = set(ChainFeature.objects.values_list('key', flat=True))
             new_features = [feature for feature in features_data if feature not in existing_features]
-            
+
             ChainFeature.objects.bulk_create([ChainFeature(key=feature) for feature in new_features])
-            
+
             self.stdout.write(self.style.SUCCESS(f"Imported {len(new_features)} new features"))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Error importing features: {str(e)}"))
 
-    def import_wallets(self, wallets_file: str, *args) -> None:
+    def import_wallets(self, wallets_file: str, *args: Any) -> None:
         try:
             wallets_data = self.load_json_data(wallets_file)
             existing_wallets = set(Wallet.objects.values_list('key', flat=True))
             new_wallets = [wallet for wallet in wallets_data if wallet not in existing_wallets]
-            
+
             Wallet.objects.bulk_create([Wallet(key=wallet) for wallet in new_wallets])
-            
+
             self.stdout.write(self.style.SUCCESS(f"Imported {len(new_wallets)} new wallets"))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Error importing wallets: {str(e)}"))
@@ -97,7 +97,6 @@ class Command(BaseCommand):
         try:
             safe_apps_data = self.load_json_data(safe_apps_file)
             imported_count = updated_count = 0
-            
             with transaction.atomic():
                 for app_data in safe_apps_data:
                     chain_ids = app_data.get('chainIds') or default_chain_ids
@@ -121,7 +120,6 @@ class Command(BaseCommand):
                         imported_count += 1
                     else:
                         updated_count += 1
-            
             self.stdout.write(self.style.SUCCESS(f"Imported {imported_count} new safe apps, updated {updated_count} existing safe apps"))
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Error importing safe apps: {str(e)}"))
@@ -134,7 +132,6 @@ class Command(BaseCommand):
                 response.raise_for_status()
                 icon_content = ContentFile(response.content)
                 icon_name = f"{safe_app.app_id}.png"
-                
                 validate_safe_app_icon_size(icon_content)
                 safe_app.icon_url.save(icon_name, icon_content, save=True)
             except requests.RequestException as e:
@@ -210,18 +207,21 @@ class Command(BaseCommand):
             block_explorer_uri_api_template = f"{re.sub(r'^https?://', 'https://api.', block_explorer)}/api?module={{module}}&action={{action}}&address={{address}}&apiKey={{apiKey}}"
         else:
             self.stdout.write(self.style.WARNING("No block explorer found for chain"))
-            return
+            return {}
+        rpc_value = chain_data.get("rpcUri", {}).get("value") or chain_data.get("rpcUri", "")
+        rpc_auth = Chain.RpcAuthentication[chain_data.get("rpcUri", {}).get("authentication", "NO_AUTHENTICATION")]
         return {
             "name": chain_data["chainName"],
             "description": chain_data.get("description", ""),
             "l2": chain_data.get("l2", False),
             "is_testnet": chain_data.get("isTestnet", False),
-            "rpc_uri": chain_data.get("rpcUri", {}).get("value") or chain_data["rpcUri"],
-            "rpc_authentication": Chain.RpcAuthentication[chain_data.get("rpcUri", {}).get("authentication", "NO_AUTHENTICATION")],
-            "safe_apps_rpc_uri": chain_data.get("safeAppsRpcUri", {}).get("value") or chain_data["rpcUri"],
+            "rpc_uri": rpc_value,
+            "rpc_authentication": rpc_auth,
+            "safe_apps_rpc_uri": chain_data.get("safeAppsRpcUri", {}).get("value") or rpc_value,
             "safe_apps_rpc_authentication": Chain.RpcAuthentication[chain_data.get("safeAppsRpcUri", {}).get("authentication", "NO_AUTHENTICATION")],
-            "public_rpc_uri": chain_data.get("publicRpcUri", {}).get("value") or chain_data["rpcUri"],
+            "public_rpc_uri": chain_data.get("publicRpcUri", {}).get("value") or rpc_value,
             "public_rpc_authentication": Chain.RpcAuthentication[chain_data.get("publicRpcUri", {}).get("authentication", "NO_AUTHENTICATION")],
+            "vpc_rpc_uri": chain_data.get("vpcRpcUri", {}).get("value") if chain_data.get("vpcRpcUri") else None,
             "transaction_service_uri": chain_data["transactionService"],
             "vpc_transaction_service_uri": chain_data["transactionService"],
             "block_explorer_uri_address_template": block_explorer_uri_address_template,

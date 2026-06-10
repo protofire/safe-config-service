@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
 import os
 import re
 from typing import IO, Union
@@ -8,7 +9,7 @@ from django.core.files.images import get_image_dimensions
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import QuerySet
-from gnosis.eth.django.models import EthereumAddressField, Uint256Field
+from safe_eth.eth.django.models import EthereumAddressBinaryField, Uint256Field
 
 HEX_ARGB_REGEX = re.compile("^#[0-9a-fA-F]{6}$")
 
@@ -47,7 +48,7 @@ def validate_native_currency_size(image: Union[str, IO[bytes]]) -> None:
         raise ValidationError("Image width and height need to be at most 512 pixels")
 
 
-def validate_tx_service_url(url: str) -> None:
+def validate_url(url: str) -> None:
     result = urlparse(url)
     if not all(
         (
@@ -66,6 +67,12 @@ class Chain(models.Model):
     class RpcAuthentication(models.TextChoices):
         API_KEY_PATH = "API_KEY_PATH"
         NO_AUTHENTICATION = "NO_AUTHENTICATION"
+
+    class RelayerType(models.TextChoices):
+        GTF = "GTF", "GTF"
+        RELAY_FEE = "RELAY_FEE", "Relay Fee"
+        DAILY_LIMIT = "DAILY_LIMIT", "Daily Limit"
+        NO_FEE_CAMPAIGN = "NO_FEE_CAMPAIGN", "No Fee Campaign"
 
     id = models.PositiveBigIntegerField(verbose_name="Chain Id", primary_key=True)
     relevance = models.SmallIntegerField(
@@ -87,6 +94,7 @@ class Chain(models.Model):
     )
     l2 = models.BooleanField()
     is_testnet = models.BooleanField(default=False)
+    zk = models.BooleanField(default=False)
     rpc_authentication = models.CharField(
         max_length=255, choices=RpcAuthentication.choices
     )
@@ -103,9 +111,18 @@ class Chain(models.Model):
         default=RpcAuthentication.NO_AUTHENTICATION,
     )
     public_rpc_uri = models.URLField()
-    block_explorer_uri_address_template = models.URLField()
-    block_explorer_uri_tx_hash_template = models.URLField()
-    block_explorer_uri_api_template = models.URLField()
+    block_explorer_uri_address_template = models.URLField(
+        default="https://placeholderURL/address/{{address}}",
+        help_text="Please replace placeholderURL by the block explorer base URL",
+    )
+    block_explorer_uri_tx_hash_template = models.URLField(
+        default="https://placeholderURL/tx/{{txHash}}",
+        help_text="Please replace placeholderURL by the block explorer base URL",
+    )
+    block_explorer_uri_api_template = models.URLField(
+        default="https://placeholderURL/api?module={{module}}&action={{action}}&address={{address}}&apiKey={{apiKey}}",
+        help_text="Please replace placeholderURL by the block explorer base URL",
+    )
     beacon_chain_explorer_uri_public_key_template = models.URLField(
         blank=True, null=True
     )
@@ -118,10 +135,19 @@ class Chain(models.Model):
         max_length=255,
     )
     transaction_service_uri = models.CharField(
-        max_length=255, validators=[validate_tx_service_url]
+        max_length=255, validators=[validate_url]
     )
     vpc_transaction_service_uri = models.CharField(
-        max_length=255, validators=[validate_tx_service_url]
+        max_length=255,
+        validators=[validate_url],
+        default="http://staging-chain-safe-transaction-web.safe-transaction-chain.svc.cluster.local",
+        help_text="Please replace chain by chain name and delete staging if production environment",
+    )
+    vpc_rpc_uri = models.CharField(
+        max_length=255,
+        validators=[validate_url],
+        default="http://chain-rpc-haproxy.safe-transaction-chain.svc.cluster.local:8545",
+        help_text="Please replace chain by chain name",
     )
     theme_text_color = models.CharField(
         validators=[color_validator],
@@ -135,9 +161,9 @@ class Chain(models.Model):
         default="#000000",
         help_text="Please use the following format: <em>#RRGGBB</em>.",
     )
-    ens_registry_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
+    ens_registry_address = EthereumAddressBinaryField(null=True, blank=True)
     recommended_master_copy_version = models.CharField(
-        max_length=255, validators=[sem_ver_validator]
+        max_length=255, validators=[sem_ver_validator], default="1.4.1"
     )
     prices_provider_native_coin = models.CharField(
         max_length=255, null=True, blank=True
@@ -151,17 +177,25 @@ class Chain(models.Model):
         help_text="This flag informs API clients whether the balances provider is enabled for the chain",
     )
     hidden = models.BooleanField(default=False)
-    safe_singleton_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    safe_proxy_factory_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    multi_send_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    multi_send_call_only_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    fallback_handler_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    sign_message_lib_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    create_call_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    simulate_tx_accessor_address = EthereumAddressField(null=True, blank=True)  # type: ignore[no-untyped-call]
-    safe_web_authn_signer_factory_address = EthereumAddressField(
+    safe_singleton_address = EthereumAddressBinaryField(null=True, blank=True)
+    safe_proxy_factory_address = EthereumAddressBinaryField(null=True, blank=True)
+    multi_send_address = EthereumAddressBinaryField(null=True, blank=True)
+    multi_send_call_only_address = EthereumAddressBinaryField(null=True, blank=True)
+    fallback_handler_address = EthereumAddressBinaryField(null=True, blank=True)
+    sign_message_lib_address = EthereumAddressBinaryField(null=True, blank=True)
+    create_call_address = EthereumAddressBinaryField(null=True, blank=True)
+    simulate_tx_accessor_address = EthereumAddressBinaryField(null=True, blank=True)
+    safe_web_authn_signer_factory_address = EthereumAddressBinaryField(
         null=True, blank=True
-    )  # type: ignore[no-untyped-call]
+    )
+    relayer_type = models.CharField(
+        max_length=32,
+        choices=RelayerType.choices,
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Relayer strategy used by the Safe Client Gateway for this chain. Leave empty for no relayer.",
+    )
 
     def get_disabled_wallets(self) -> QuerySet["Wallet"]:
         all_wallets = Wallet.objects.all()
@@ -239,15 +273,52 @@ class Wallet(models.Model):
         max_length=255,
         help_text="The unique name/key that identifies this wallet",
     )
+    enable_by_default = models.BooleanField(
+        default=False,
+        help_text="If checked, this wallet will be automatically enabled when creating a new chain.",
+    )
 
     def __str__(self) -> str:
         return f"Wallet: {self.key}"
 
 
-class Feature(models.Model):
-    # A feature can be enabled for multiple Chains and a Chain can have multiple features enabled
+class GasToken(models.Model):
     chains = models.ManyToManyField(
-        Chain, blank=True, help_text="Chains where this feature is enabled."
+        Chain,
+        blank=True,
+        help_text="Chains where this token is accepted as a fee payment.",
+    )
+    address = EthereumAddressBinaryField(
+        unique=True, help_text="Token contract address."
+    )
+    symbol = models.CharField(max_length=50)
+
+    def __str__(self) -> str:
+        return f"GasToken: {self.symbol} ({self.address})"
+
+
+class Service(models.Model):
+    key = models.CharField(
+        unique=True,
+        max_length=255,
+        help_text="The unique key that identifies this service (e.g., 'cgw', 'frontend')",
+    )
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=255, blank=True, default="")
+
+    def __str__(self) -> str:
+        return f"{self.name} | {self.key}"
+
+
+class Feature(models.Model):
+    class Scope(models.TextChoices):
+        GLOBAL = "GLOBAL", "Global"
+        PER_CHAIN = "PER_CHAIN", "Per-chain"
+
+    chains = models.ManyToManyField(
+        Chain,
+        blank=True,
+        help_text="Chains where this feature is enabled. Used only when scope is per-chain.",
     )
     key = models.CharField(
         unique=True,
@@ -255,7 +326,18 @@ class Feature(models.Model):
         help_text="The unique name/key that identifies this feature",
     )
     description = models.CharField(max_length=255, default="")
-
+    scope = models.CharField(
+        max_length=10,
+        choices=Scope.choices,
+        default=Scope.PER_CHAIN,
+        db_index=True,
+        help_text="Global applies to all chains. Per-chain limits the feature to selected chains.",
+    )
+    services = models.ManyToManyField(
+        Service,
+        blank=True,
+        help_text="Services that have access to this feature.",
+    )
 
     def __str__(self) -> str:
-        return f"Chain Feature: {self.key}"
+        return f"Feature: {self.key}"

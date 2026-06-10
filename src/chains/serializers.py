@@ -1,13 +1,14 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
 from abc import abstractmethod
 from typing import Any
 
 from drf_yasg.utils import swagger_serializer_method
-from gnosis.eth.django.serializers import EthereumAddressField
+from safe_eth.eth.django.serializers import EthereumAddressField
 from rest_framework import serializers
 from rest_framework.exceptions import APIException
 from rest_framework.utils.serializer_helpers import ReturnDict
 
-from .models import Chain, Feature, GasPrice, Wallet
+from .models import Chain, Feature, GasPrice, GasToken, Service, Wallet
 
 
 class GasPriceOracleSerializer(serializers.Serializer[GasPrice]):
@@ -158,8 +159,7 @@ class FeatureSerializer(serializers.ModelSerializer[Feature]):
         model = Feature
         ref_name = "chains.serializers.FeatureSerializer"
 
-    @staticmethod
-    def to_representation(instance: Feature) -> str:  # type: ignore[override]
+    def to_representation(self, instance: Feature) -> str:  # type: ignore[override]
         return instance.key
 
 
@@ -169,9 +169,17 @@ class WalletSerializer(serializers.ModelSerializer[Wallet]):
         model = Wallet
         ref_name = "chains.serializers.WalletSerializer"
 
-    @staticmethod
-    def to_representation(instance: Wallet) -> str:  # type: ignore[override]
+    def to_representation(self, instance: Wallet) -> str:  # type: ignore[override]
         return instance.key
+
+
+class GasTokenSerializer(serializers.ModelSerializer[GasToken]):
+    address = EthereumAddressField()
+
+    class Meta:
+        model = GasToken
+        fields = ["address", "symbol"]
+        ref_name = "chains.serializers.GasTokenSerializer"
 
 
 class ChainSerializer(serializers.ModelSerializer[Chain]):
@@ -192,6 +200,7 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
         source="transaction_service_uri", default=None
     )
     vpc_transaction_service = serializers.URLField(source="vpc_transaction_service_uri")
+    vpc_rpc_uri = serializers.URLField()
     theme = serializers.SerializerMethodField()
     gas_price = serializers.SerializerMethodField()
     ens_registry_address = EthereumAddressField()
@@ -208,6 +217,7 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
             "chain_logo_uri",
             "l2",
             "is_testnet",
+            "zk",
             "rpc_uri",
             "safe_apps_rpc_uri",
             "public_rpc_uri",
@@ -219,73 +229,86 @@ class ChainSerializer(serializers.ModelSerializer[Chain]):
             "contract_addresses",
             "transaction_service",
             "vpc_transaction_service",
+            "vpc_rpc_uri",
             "theme",
             "gas_price",
             "ens_registry_address",
             "recommended_master_copy_version",
             "disabled_wallets",
             "features",
+            "relayer_type",
         ]
 
-    @swagger_serializer_method(serializer_or_field=CurrencySerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=CurrencySerializer)  # type: ignore[untyped-decorator]
     def get_native_currency(self, obj: Chain) -> ReturnDict[Any, Any]:
         return CurrencySerializer(
             obj, context={"request": self.context["request"]}
         ).data
 
     @staticmethod
-    @swagger_serializer_method(serializer_or_field=ThemeSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=ThemeSerializer)  # type: ignore[untyped-decorator]
     def get_theme(obj: Chain) -> ReturnDict[Any, Any]:
         return ThemeSerializer(obj).data
 
     @staticmethod
-    @swagger_serializer_method(serializer_or_field=BaseRpcUriSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=BaseRpcUriSerializer)  # type: ignore[untyped-decorator]
     def get_safe_apps_rpc_uri(obj: Chain) -> ReturnDict[Any, Any]:
         return SafeAppsRpcUriSerializer(obj).data
 
     @staticmethod
-    @swagger_serializer_method(serializer_or_field=BaseRpcUriSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=BaseRpcUriSerializer)  # type: ignore[untyped-decorator]
     def get_rpc_uri(obj: Chain) -> ReturnDict[Any, Any]:
         return RpcUriSerializer(obj).data
 
     @staticmethod
-    @swagger_serializer_method(serializer_or_field=BaseRpcUriSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=BaseRpcUriSerializer)  # type: ignore[untyped-decorator]
     def get_public_rpc_uri(obj: Chain) -> ReturnDict[Any, Any]:
         return PublicRpcUriSerializer(obj).data
 
     @staticmethod
-    @swagger_serializer_method(serializer_or_field=BlockExplorerUriTemplateSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=BlockExplorerUriTemplateSerializer)  # type: ignore[untyped-decorator]
     def get_block_explorer_uri_template(obj: Chain) -> ReturnDict[Any, Any]:
         return BlockExplorerUriTemplateSerializer(obj).data
 
     @staticmethod
-    @swagger_serializer_method(serializer_or_field=BeaconChainExplorerUriTemplateSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=BeaconChainExplorerUriTemplateSerializer)  # type: ignore[untyped-decorator]
     def get_beacon_chain_explorer_uri_template(obj: Chain) -> ReturnDict[Any, Any]:
         return BeaconChainExplorerUriTemplateSerializer(obj).data
 
-    @swagger_serializer_method(serializer_or_field=GasPriceSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=GasPriceSerializer)  # type: ignore[untyped-decorator]
     def get_gas_price(self, instance: Chain) -> ReturnDict[Any, Any]:
         ranked_gas_prices = instance.gasprice_set.all().order_by("rank")
         return GasPriceSerializer(ranked_gas_prices, many=True).data
 
-    @swagger_serializer_method(serializer_or_field=WalletSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=WalletSerializer)  # type: ignore[untyped-decorator]
     def get_disabled_wallets(self, instance: Chain) -> ReturnDict[Any, Any]:
         disabled_wallets = instance.get_disabled_wallets().order_by("key")
         return WalletSerializer(disabled_wallets, many=True).data
 
-    @swagger_serializer_method(serializer_or_field=FeatureSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=FeatureSerializer)  # type: ignore[untyped-decorator]
     def get_features(self, instance: Chain) -> ReturnDict[Any, Any]:
-        enabled_features = instance.feature_set.all().order_by("key")
+        service: Service | None = self.context.get("service")
+        if service:
+            global_features = self.context.get("_service_global_features", [])
+            per_chain_features = instance.feature_set.all()
+            enabled_features = sorted(
+                [*global_features, *per_chain_features],
+                key=lambda f: f.key,
+            )
+        else:
+            enabled_features = list(
+                instance.feature_set.all().order_by("key")
+            )
         return FeatureSerializer(enabled_features, many=True).data
 
-    @swagger_serializer_method(serializer_or_field=PricesProviderSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=PricesProviderSerializer)  # type: ignore[untyped-decorator]
     def get_prices_provider(self, instance: Chain) -> ReturnDict[Any, Any]:
         return PricesProviderSerializer(instance).data
 
-    @swagger_serializer_method(serializer_or_field=BalancesProviderSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=BalancesProviderSerializer)  # type: ignore[untyped-decorator]
     def get_balances_provider(self, instance: Chain) -> ReturnDict[Any, Any]:
         return BalancesProviderSerializer(instance).data
 
-    @swagger_serializer_method(serializer_or_field=ContractAddressesSerializer)  # type: ignore[misc]
+    @swagger_serializer_method(serializer_or_field=ContractAddressesSerializer)  # type: ignore[untyped-decorator]
     def get_contract_addresses(self, instance: Chain) -> ReturnDict[Any, Any]:
         return ContractAddressesSerializer(instance).data

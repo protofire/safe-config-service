@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+
 # safe-config-service
 
 [![Coverage Status](https://coveralls.io/repos/github/gnosis/safe-config-service/badge.svg)](https://coveralls.io/github/gnosis/safe-config-service)
@@ -7,20 +9,22 @@ The `safe-config-service` is a service that provides configuration information i
 ## Requirements
 
 - `docker-compose` – https://docs.docker.com/compose/install/
-- Python 3.12.2
+- Python 3.14.3
 
 ## Setup
 
 In order to start the server application:
 
-#### 1. Install the required Python dependencies. Eg.: With a python virtual environment:
+#### 1. Install the required Python dependencies using [uv](https://docs.astral.sh/uv/):
 
 ```shell
-python -m venv venv # creates a virtual environment venv in the local directory
-source venv/bin/activate
-pip install -r requirements-dev.txt
-pip install setuptools
+uv venv
+source .venv/bin/activate
+uv sync
 ```
+
+### Supply chain attack protection
+Dependencies are managed with uv and locked in `uv.lock` with SHA-256 hashes for every direct and transitive package. The `exclude-newer = "2 days"` setting in `pyproject.toml` prevents resolving packages published in the last 2 days, providing a quarantine period to catch compromised releases before they enter the lock file. Production installs use `uv sync --frozen` to enforce hash verification.
 
 #### 2. Launch the Postgres database image
 
@@ -80,3 +84,18 @@ To manually trigger the checks, run:
 ```shell
 pre-commit run --all-files
 ```
+
+## Licensing
+
+This repository contains code developed under two different ownership and licensing regimes, split by a defined cut-over date.
+
+- **Up to and including February 16, 2026**
+  Code is © Safe Ecosystem Foundation and licensed under the **MIT License**.
+  The final SEF-owned MIT snapshot is tagged as: **`sef-mit-final`**
+- **From February 17, 2026 onward**
+  New development is © Safe Labs GmbH and licensed under the
+  **Functional Source License, Version 1.1 (MIT Future License)**.
+
+Users who require a purely MIT-licensed codebase should base their work on the `sef-mit-final` tag. The historical MIT-licensed code remains MIT and is not retroactively relicensed.
+
+For full details, see `LICENSE.md` and `NOTICE.md`.

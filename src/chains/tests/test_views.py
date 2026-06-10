@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
 from decimal import Decimal
 from typing import Any
 
@@ -5,7 +6,15 @@ from django.urls import reverse
 from faker import Faker
 from rest_framework.test import APITestCase
 
-from .factories import ChainFactory, FeatureFactory, GasPriceFactory, WalletFactory
+from ..models import Chain, Feature
+from .factories import (
+    ChainFactory,
+    FeatureFactory,
+    GasPriceFactory,
+    GasTokenFactory,
+    ServiceFactory,
+    WalletFactory,
+)
 
 
 class EmptyChainsListViewTests(APITestCase):
@@ -43,6 +52,7 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
                     "chainLogoUri": f"http://testserver{chain.chain_logo_uri.url}",
                     "l2": chain.l2,
                     "isTestnet": chain.is_testnet,
+                    "zk": chain.zk,
                     "rpcUri": {
                         "authentication": chain.rpc_authentication,
                         "value": chain.rpc_uri,
@@ -79,6 +89,7 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
                     },
                     "transactionService": chain.transaction_service_uri,
                     "vpcTransactionService": chain.vpc_transaction_service_uri,
+                    "vpcRpcUri": chain.vpc_rpc_uri,
                     "theme": {
                         "textColor": chain.theme_text_color,
                         "backgroundColor": chain.theme_background_color,
@@ -104,6 +115,7 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
                         "simulateTxAccessorAddress": chain.simulate_tx_accessor_address,
                         "safeWebAuthnSignerFactoryAddress": chain.safe_web_authn_signer_factory_address,
                     },
+                    "relayerType": chain.relayer_type,
                 }
             ],
         }
@@ -130,7 +142,7 @@ class ChainPaginationViewTests(APITestCase):
             "http://testserver/api/v1/chains/?limit=40&offset=40",
         )
         self.assertEqual(response.json()["previous"], None)
-        # returned items should be equal to max_limit
+        # returned items should be equal to default_limit
         self.assertEqual(len(response.json()["results"]), 40)
 
     def test_request_more_than_max_limit_should_return_max_limit(self) -> None:
@@ -145,11 +157,11 @@ class ChainPaginationViewTests(APITestCase):
         self.assertEqual(response.json()["count"], 101)
         self.assertEqual(
             response.json()["next"],
-            "http://testserver/api/v1/chains/?limit=40&offset=40",
+            "http://testserver/api/v1/chains/?limit=100&offset=100",
         )
         self.assertEqual(response.json()["previous"], None)
         # returned items should still be equal to max_limit
-        self.assertEqual(len(response.json()["results"]), 40)
+        self.assertEqual(len(response.json()["results"]), 100)
 
     def test_offset_greater_than_count(self) -> None:
         ChainFactory.create_batch(41)
@@ -184,6 +196,7 @@ class ChainDetailViewTests(APITestCase):
             "chainLogoUri": f"http://testserver{chain.chain_logo_uri.url}",
             "l2": chain.l2,
             "isTestnet": chain.is_testnet,
+            "zk": chain.zk,
             "rpcUri": {
                 "authentication": chain.rpc_authentication,
                 "value": chain.rpc_uri,
@@ -220,6 +233,7 @@ class ChainDetailViewTests(APITestCase):
             },
             "transactionService": chain.transaction_service_uri,
             "vpcTransactionService": chain.vpc_transaction_service_uri,
+            "vpcRpcUri": chain.vpc_rpc_uri,
             "theme": {
                 "textColor": chain.theme_text_color,
                 "backgroundColor": chain.theme_background_color,
@@ -245,6 +259,7 @@ class ChainDetailViewTests(APITestCase):
                 "simulateTxAccessorAddress": chain.simulate_tx_accessor_address,
                 "safeWebAuthnSignerFactoryAddress": chain.safe_web_authn_signer_factory_address,
             },
+            "relayerType": chain.relayer_type,
         }
 
         response = self.client.get(path=url, data=None, format="json")
@@ -341,6 +356,28 @@ class ChainsEnsRegistryTests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["ensRegistryAddress"], None)
+
+
+class ChainRelayerTypeTests(APITestCase):
+    def test_null_relayer_type(self) -> None:
+        ChainFactory.create(id=1, relayer_type=None)
+        url = reverse("v1:chains:detail", args=[1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["relayerType"])
+
+    def test_each_relayer_type_value(self) -> None:
+        for index, relayer_type in enumerate(Chain.RelayerType):
+            with self.subTest(relayer_type=relayer_type.value):
+                ChainFactory.create(id=index, relayer_type=relayer_type)
+                url = reverse("v1:chains:detail", args=[index])
+
+                response = self.client.get(path=url, data=None, format="json")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["relayerType"], relayer_type.value)
 
 
 class ChainGasPriceTests(APITestCase):
@@ -459,7 +496,7 @@ class ChainGasPriceTests(APITestCase):
         chain = ChainFactory.create(id=1)
         GasPriceFactory.create(
             chain=chain,
-            fixed_wei_value="115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            fixed_wei_value=115792089237316195423570985008687907853269984665640564039457584007913129639935,
         )
         url = reverse("v1:chains:detail", args=[1])
         expected_oracle_json_payload = [
@@ -569,3 +606,280 @@ class FeatureTests(APITestCase):
             response.json()["features"],
             [feature_3.key, feature_2.key, feature_1.key],
         )
+
+
+class V1FeatureRegressionTests(APITestCase):
+    """Ensure v1 behavior remains unchanged after adding service-aware features."""
+
+    def test_v1_ignores_global_scope(self) -> None:
+        """v1 should not return GLOBAL features unless they have the chain in chains."""
+        chain = ChainFactory.create(id=1)
+        global_feature = FeatureFactory.create(
+            key="global_feature", scope=Feature.Scope.GLOBAL, chains=()
+        )
+        url = reverse("v1:chains:detail", args=[1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(global_feature.key, response.json()["features"])
+
+    def test_v1_ignores_service_assignment(self) -> None:
+        """v1 should return features based on chain assignment only, ignoring services."""
+        chain = ChainFactory.create(id=1)
+        service = ServiceFactory.create(key="cgw")
+        feature_with_service = FeatureFactory.create(
+            key="feature_with_service", chains=(chain,), services=(service,)
+        )
+        feature_without_service = FeatureFactory.create(
+            key="feature_without_service", chains=(chain,), services=()
+        )
+        url = reverse("v1:chains:detail", args=[1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(feature_with_service.key, response.json()["features"])
+        self.assertIn(feature_without_service.key, response.json()["features"])
+
+
+class V2ChainsListViewTests(APITestCase):
+    """Tests for v2 service-aware chain list endpoint."""
+
+    def test_nonexistent_service_returns_404(self) -> None:
+        url = reverse("v2:chains:list", args=["nonexistent"])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_chains_for_valid_service(self) -> None:
+        service = ServiceFactory.create(key="cgw")
+        ChainFactory.create(id=1)
+        ChainFactory.create(id=2)
+        url = reverse("v2:chains:list", args=["cgw"])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 2)
+
+
+class V2ChainsDetailViewTests(APITestCase):
+    """Tests for v2 service-aware chain detail endpoint."""
+
+    def test_nonexistent_service_returns_404(self) -> None:
+        ChainFactory.create(id=1)
+        url = reverse("v2:chains:detail", args=["nonexistent", 1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_nonexistent_chain_returns_404(self) -> None:
+        service = ServiceFactory.create(key="cgw")
+        url = reverse("v2:chains:detail", args=["cgw", 999])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 404)
+
+
+class V2FeatureFilteringTests(APITestCase):
+    """Tests for v2 service-aware feature filtering."""
+
+    def test_global_feature_appears_for_all_chains(self) -> None:
+        service = ServiceFactory.create(key="cgw")
+        chain1 = ChainFactory.create(id=1)
+        chain2 = ChainFactory.create(id=2)
+        global_feature = FeatureFactory.create(
+            key="global_feature",
+            scope=Feature.Scope.GLOBAL,
+            chains=(),
+            services=(service,),
+        )
+
+        url1 = reverse("v2:chains:detail", args=["cgw", 1])
+        url2 = reverse("v2:chains:detail", args=["cgw", 2])
+
+        response1 = self.client.get(path=url1, data=None, format="json")
+        response2 = self.client.get(path=url2, data=None, format="json")
+
+        self.assertEqual(response1.status_code, 200)
+        self.assertEqual(response2.status_code, 200)
+        self.assertIn(global_feature.key, response1.json()["features"])
+        self.assertIn(global_feature.key, response2.json()["features"])
+
+    def test_per_chain_feature_only_for_assigned_chains(self) -> None:
+        service = ServiceFactory.create(key="cgw")
+        chain1 = ChainFactory.create(id=1)
+        chain2 = ChainFactory.create(id=2)
+        per_chain_feature = FeatureFactory.create(
+            key="per_chain_feature",
+            scope=Feature.Scope.PER_CHAIN,
+            chains=(chain1,),
+            services=(service,),
+        )
+
+        url1 = reverse("v2:chains:detail", args=["cgw", 1])
+        url2 = reverse("v2:chains:detail", args=["cgw", 2])
+
+        response1 = self.client.get(path=url1, data=None, format="json")
+        response2 = self.client.get(path=url2, data=None, format="json")
+
+        self.assertEqual(response1.status_code, 200)
+        self.assertEqual(response2.status_code, 200)
+        self.assertIn(per_chain_feature.key, response1.json()["features"])
+        self.assertNotIn(per_chain_feature.key, response2.json()["features"])
+
+    def test_feature_not_assigned_to_service_not_returned(self) -> None:
+        service_cgw = ServiceFactory.create(key="cgw")
+        service_frontend = ServiceFactory.create(key="frontend")
+        chain = ChainFactory.create(id=1)
+        feature_for_cgw = FeatureFactory.create(
+            key="cgw_only",
+            scope=Feature.Scope.PER_CHAIN,
+            chains=(chain,),
+            services=(service_cgw,),
+        )
+        feature_for_frontend = FeatureFactory.create(
+            key="frontend_only",
+            scope=Feature.Scope.PER_CHAIN,
+            chains=(chain,),
+            services=(service_frontend,),
+        )
+
+        url_cgw = reverse("v2:chains:detail", args=["cgw", 1])
+        url_frontend = reverse("v2:chains:detail", args=["frontend", 1])
+
+        response_cgw = self.client.get(path=url_cgw, data=None, format="json")
+        response_frontend = self.client.get(path=url_frontend, data=None, format="json")
+
+        self.assertEqual(response_cgw.status_code, 200)
+        self.assertEqual(response_frontend.status_code, 200)
+        self.assertIn(feature_for_cgw.key, response_cgw.json()["features"])
+        self.assertNotIn(feature_for_frontend.key, response_cgw.json()["features"])
+        self.assertIn(feature_for_frontend.key, response_frontend.json()["features"])
+        self.assertNotIn(feature_for_cgw.key, response_frontend.json()["features"])
+
+    def test_feature_assigned_to_multiple_services(self) -> None:
+        service_cgw = ServiceFactory.create(key="cgw")
+        service_frontend = ServiceFactory.create(key="frontend")
+        chain = ChainFactory.create(id=1)
+        shared_feature = FeatureFactory.create(
+            key="shared_feature",
+            scope=Feature.Scope.GLOBAL,
+            chains=(),
+            services=(service_cgw, service_frontend),
+        )
+
+        url_cgw = reverse("v2:chains:detail", args=["cgw", 1])
+        url_frontend = reverse("v2:chains:detail", args=["frontend", 1])
+
+        response_cgw = self.client.get(path=url_cgw, data=None, format="json")
+        response_frontend = self.client.get(path=url_frontend, data=None, format="json")
+
+        self.assertEqual(response_cgw.status_code, 200)
+        self.assertEqual(response_frontend.status_code, 200)
+        self.assertIn(shared_feature.key, response_cgw.json()["features"])
+        self.assertIn(shared_feature.key, response_frontend.json()["features"])
+
+    def test_feature_with_no_services_not_returned_in_v2(self) -> None:
+        service = ServiceFactory.create(key="cgw")
+        chain = ChainFactory.create(id=1)
+        feature_no_services = FeatureFactory.create(
+            key="no_services",
+            scope=Feature.Scope.PER_CHAIN,
+            chains=(chain,),
+            services=(),
+        )
+
+        url = reverse("v2:chains:detail", args=["cgw", 1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(feature_no_services.key, response.json()["features"])
+
+
+class EmptyGasTokensListViewTests(APITestCase):
+    def test_empty_response_when_no_gas_tokens(self) -> None:
+        chain = ChainFactory.create()
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"count": 0, "next": None, "previous": None, "results": []},
+        )
+
+    def test_returns_404_for_nonexistent_chain(self) -> None:
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[9999]), format="json"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_404_for_hidden_chain(self) -> None:
+        chain = ChainFactory.create(hidden=True)
+        GasTokenFactory.create(chains=(chain,))
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_empty_response_when_tokens_belong_to_other_chain(self) -> None:
+        chain = ChainFactory.create()
+        other_chain = ChainFactory.create()
+        GasTokenFactory.create(chains=(other_chain,))
+        GasTokenFactory.create(chains=(other_chain,))
+
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["count"], 0)
+        self.assertEqual(response.json()["results"], [])
+
+
+class GasTokensJsonPayloadFormatTests(APITestCase):
+    def test_json_payload_format(self) -> None:
+        chain = ChainFactory.create()
+        gas_token = GasTokenFactory.create(chains=(chain,))
+
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "count": 1,
+                "next": None,
+                "previous": None,
+                "results": [
+                    {
+                        "address": gas_token.address,
+                        "symbol": gas_token.symbol,
+                    }
+                ],
+            },
+        )
+
+    def test_token_shared_across_chains_appears_in_each_chain_response(self) -> None:
+        chain_a = ChainFactory.create()
+        chain_b = ChainFactory.create()
+        gas_token = GasTokenFactory.create(chains=(chain_a, chain_b))
+
+        for chain in (chain_a, chain_b):
+            response = self.client.get(
+                path=reverse("v1:chains:gas-tokens-list", args=[chain.id]),
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200)
+            result = response.json()["results"][0]
+            self.assertEqual(result["address"], gas_token.address)
+            self.assertEqual(result["symbol"], gas_token.symbol)

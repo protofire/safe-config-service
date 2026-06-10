@@ -1,10 +1,11 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
 import random
 
 import factory
 import web3
 from factory.django import DjangoModelFactory
 
-from ..models import Chain, Feature, GasPrice, Wallet
+from ..models import Chain, Feature, GasPrice, GasToken, Service, Wallet
 
 
 class ChainFactory(DjangoModelFactory):  # type: ignore[misc]
@@ -19,6 +20,7 @@ class ChainFactory(DjangoModelFactory):  # type: ignore[misc]
     chain_logo_uri = factory.django.ImageField(width=50, height=50)
     l2 = factory.Faker("pybool")
     is_testnet = factory.Faker("pybool")
+    zk = factory.Faker("pybool")
     rpc_authentication = factory.lazy_attribute(
         lambda o: random.choice(list(Chain.RpcAuthentication))
     )
@@ -41,6 +43,7 @@ class ChainFactory(DjangoModelFactory):  # type: ignore[misc]
     currency_logo_uri = factory.django.ImageField(width=50, height=50)
     transaction_service_uri = factory.Faker("url")
     vpc_transaction_service_uri = factory.Faker("url")
+    vpc_rpc_uri = factory.Faker("url")
     theme_text_color = factory.Faker("hex_color")
     theme_background_color = factory.Faker("hex_color")
     ens_registry_address = factory.LazyAttribute(
@@ -74,6 +77,9 @@ class ChainFactory(DjangoModelFactory):  # type: ignore[misc]
     )
     safe_web_authn_signer_factory_address = factory.LazyAttribute(
         lambda o: web3.Account.create().address
+    )
+    relayer_type = factory.LazyAttribute(
+        lambda o: random.choice([None, *list(Chain.RelayerType)])
     )
 
 
@@ -111,11 +117,39 @@ class WalletFactory(DjangoModelFactory):  # type: ignore[misc]
                 self.chains.add(chain)
 
 
+class ServiceFactory(DjangoModelFactory):  # type: ignore[misc]
+    class Meta:
+        model = Service
+
+    key = factory.Faker("slug")
+    name = factory.Faker("company")
+    description = factory.Faker("sentence")
+
+
+class GasTokenFactory(DjangoModelFactory):  # type: ignore[misc]
+    class Meta:
+        model = GasToken
+
+    address = factory.LazyAttribute(lambda o: web3.Account.create().address)
+    symbol = factory.Faker("cryptocurrency_code")
+
+    @factory.post_generation
+    def chains(self, create, extracted, **kwargs):  # type: ignore[no-untyped-def]
+        if not create:
+            return
+
+        if extracted:
+            for chain in extracted:
+                self.chains.add(chain)
+
+
 class FeatureFactory(DjangoModelFactory):  # type: ignore[misc]
     class Meta:
         model = Feature
 
     key = factory.Faker("company")
+    description = factory.Faker("sentence")
+    scope = Feature.Scope.PER_CHAIN
 
     @factory.post_generation
     def chains(self, create, extracted, **kwargs):  # type: ignore[no-untyped-def] # decorator is untyped
@@ -125,3 +159,12 @@ class FeatureFactory(DjangoModelFactory):  # type: ignore[misc]
         if extracted:
             for chain in extracted:
                 self.chains.add(chain)
+
+    @factory.post_generation
+    def services(self, create, extracted, **kwargs):  # type: ignore[no-untyped-def] # decorator is untyped
+        if not create:
+            return
+
+        if extracted:
+            for service in extracted:
+                self.services.add(service)

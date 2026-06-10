@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
 from decimal import Decimal
 
 import factory
@@ -7,7 +8,15 @@ from django.db import DataError
 from django.test import TestCase, TransactionTestCase
 from faker import Faker
 
-from .factories import ChainFactory, FeatureFactory, GasPriceFactory, WalletFactory
+from ..models import Feature
+from .factories import (
+    ChainFactory,
+    FeatureFactory,
+    GasPriceFactory,
+    GasTokenFactory,
+    ServiceFactory,
+    WalletFactory,
+)
 
 
 class ChainTestCase(TestCase):
@@ -82,7 +91,7 @@ class ChainGasPriceFixedTestCase(TestCase):
     def test_big_number() -> None:
         gas_price = GasPriceFactory.create(
             oracle_uri=None,
-            fixed_wei_value="115792089237316195423570985008687907853269984665640564039457584007913129639935",
+            fixed_wei_value=115792089237316195423570985008687907853269984665640564039457584007913129639935,
         )
 
         gas_price.full_clean()
@@ -96,17 +105,17 @@ class ChainGasPriceFixed1559TestCase(TestCase):
         gas_price = GasPriceFactory.create(
             oracle_uri=None,
             fixed_wei_value=None,
-            max_fee_per_gas="100000",
-            max_priority_fee_per_gas="1000",
+            max_fee_per_gas=100000,
+            max_priority_fee_per_gas=1000,
         )
 
         gas_price.full_clean()
 
     def test_fixed_and_fixed1559_defined(self) -> None:
         gas_price = GasPriceFactory.create(
-            fixed_wei_value="100000",
-            max_fee_per_gas="100000",
-            max_priority_fee_per_gas="1000",
+            fixed_wei_value=100000,
+            max_fee_per_gas=100000,
+            max_priority_fee_per_gas=1000,
         )
 
         with self.assertRaises(ValidationError):
@@ -116,9 +125,9 @@ class ChainGasPriceFixed1559TestCase(TestCase):
         gas_price = GasPriceFactory.create(
             oracle_uri=self.faker.url(),
             oracle_parameter="fake parameter",
-            fixed_wei_value="100000",
-            max_fee_per_gas="100000",
-            max_priority_fee_per_gas="1000",
+            fixed_wei_value=100000,
+            max_fee_per_gas=100000,
+            max_priority_fee_per_gas=1000,
         )
 
         with self.assertRaises(ValidationError):
@@ -217,12 +226,7 @@ class ChainEnsRegistryAddressValidationTestCase(TransactionTestCase):
 
         for invalid_address in param_list:
             with self.subTest(msg=f"Invalid address {invalid_address} should throw"):
-                with self.assertRaises(
-                    (
-                        # normalize_address from gnosis-py throws a generic Exception if the address is not valid
-                        Exception,
-                    )
-                ):
+                with self.assertRaises(ValidationError):
                     chain = ChainFactory.create(ens_registry_address=invalid_address)
                     # run validators
                     chain.full_clean()
@@ -257,6 +261,11 @@ class ChainTransactionServiceUrlValidationTestCase(TestCase):
                     chain = ChainFactory.create(vpc_transaction_service_uri=invalid_url)
                     chain.full_clean()
 
+            with self.subTest(msg=f"{invalid_url} is not a valid url"):
+                with self.assertRaises(ValidationError):
+                    chain = ChainFactory.create(vpc_rpc_uri=invalid_url)
+                    chain.full_clean()
+
     def test_valid_urls(self) -> None:
         param_list = [
             "http://tx-service",
@@ -272,6 +281,10 @@ class ChainTransactionServiceUrlValidationTestCase(TestCase):
 
             with self.subTest(msg=f"Valid url {valid_url} should not throw"):
                 chain = ChainFactory.create(vpc_transaction_service_uri=valid_url)
+                chain.full_clean()
+
+            with self.subTest(msg=f"Valid url {valid_url} should not throw"):
+                chain = ChainFactory.create(vpc_rpc_uri=valid_url)
                 chain.full_clean()
 
 
@@ -385,4 +398,60 @@ class FeatureTestCase(TestCase):
     def test_str_method_outputs_name(self) -> None:
         feature = FeatureFactory.create()
 
-        self.assertEqual(str(feature), f"Chain Feature: {feature.key}")
+        self.assertEqual(str(feature), f"Feature: {feature.key}")
+
+
+class ServiceTestCase(TestCase):
+    def test_str_method_outputs_name_and_key(self) -> None:
+        service = ServiceFactory.create(key="cgw", name="Client Gateway")
+
+        self.assertEqual(str(service), "Client Gateway | cgw")
+
+
+class GasTokenTestCase(TestCase):
+    def test_str_method_outputs_symbol_and_address(self) -> None:
+        token = GasTokenFactory.create()
+
+        self.assertEqual(str(token), f"GasToken: {token.symbol} ({token.address})")
+
+    def test_symbol_can_be_repeated_across_different_addresses(self) -> None:
+        GasTokenFactory.create(symbol="USDC")
+        duplicate = GasTokenFactory.create(symbol="USDC")
+
+        self.assertEqual(duplicate.symbol, "USDC")
+
+    def test_token_can_belong_to_multiple_chains(self) -> None:
+        chain_a = ChainFactory.create()
+        chain_b = ChainFactory.create()
+        token = GasTokenFactory.create(chains=(chain_a, chain_b))
+
+        self.assertIn(chain_a, token.chains.all())
+        self.assertIn(chain_b, token.chains.all())
+
+    def test_token_without_chains_is_valid(self) -> None:
+        token = GasTokenFactory.create()
+
+        token.full_clean()
+
+
+class FeatureScopeValidationTestCase(TestCase):
+    def test_global_scope_without_chains_is_valid(self) -> None:
+        feature = FeatureFactory.create(scope=Feature.Scope.GLOBAL, chains=())
+
+        feature.full_clean()
+
+    def test_per_chain_scope_with_chains_is_valid(self) -> None:
+        chain = ChainFactory.create()
+        feature = FeatureFactory.create(scope=Feature.Scope.PER_CHAIN, chains=(chain,))
+
+        feature.full_clean()
+
+    def test_per_chain_scope_without_chains_is_valid(self) -> None:
+        feature = FeatureFactory.create(scope=Feature.Scope.PER_CHAIN, chains=())
+
+        feature.full_clean()
+
+    def test_default_scope_is_per_chain(self) -> None:
+        feature = FeatureFactory.create()
+
+        self.assertEqual(feature.scope, Feature.Scope.PER_CHAIN)
