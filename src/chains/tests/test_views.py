@@ -115,7 +115,12 @@ class ChainJsonPayloadFormatViewTests(APITestCase):
                         "simulateTxAccessorAddress": chain.simulate_tx_accessor_address,
                         "safeWebAuthnSignerFactoryAddress": chain.safe_web_authn_signer_factory_address,
                     },
-                    "relayerType": chain.relayer_type,
+                    "relayer": {
+                        "type": chain.relayer_type,
+                        "safeCreationSponsored": chain.relayer_safe_creation_sponsored,
+                        "safeTransactionSponsored": chain.relayer_safe_transaction_sponsored,
+                        "enableTenderlySimulationBeforeRelay": chain.relayer_enable_tenderly_simulation_before_relay,
+                    },
                 }
             ],
         }
@@ -259,7 +264,12 @@ class ChainDetailViewTests(APITestCase):
                 "simulateTxAccessorAddress": chain.simulate_tx_accessor_address,
                 "safeWebAuthnSignerFactoryAddress": chain.safe_web_authn_signer_factory_address,
             },
-            "relayerType": chain.relayer_type,
+            "relayer": {
+                "type": chain.relayer_type,
+                "safeCreationSponsored": chain.relayer_safe_creation_sponsored,
+                "safeTransactionSponsored": chain.relayer_safe_transaction_sponsored,
+                "enableTenderlySimulationBeforeRelay": chain.relayer_enable_tenderly_simulation_before_relay,
+            },
         }
 
         response = self.client.get(path=url, data=None, format="json")
@@ -366,7 +376,7 @@ class ChainRelayerTypeTests(APITestCase):
         response = self.client.get(path=url, data=None, format="json")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.json()["relayerType"])
+        self.assertIsNone(response.json()["relayer"]["type"])
 
     def test_each_relayer_type_value(self) -> None:
         for index, relayer_type in enumerate(Chain.RelayerType):
@@ -377,7 +387,39 @@ class ChainRelayerTypeTests(APITestCase):
                 response = self.client.get(path=url, data=None, format="json")
 
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json()["relayerType"], relayer_type.value)
+                self.assertEqual(
+                    response.json()["relayer"]["type"], relayer_type.value
+                )
+
+    def test_relayer_sponsoring_flags(self) -> None:
+        ChainFactory.create(
+            id=1,
+            relayer_type=Chain.RelayerType.GTF,
+            relayer_safe_creation_sponsored=True,
+            relayer_safe_transaction_sponsored=False,
+            relayer_enable_tenderly_simulation_before_relay=True,
+        )
+        url = reverse("v1:chains:detail", args=[1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        relayer = response.json()["relayer"]
+        self.assertEqual(relayer["type"], Chain.RelayerType.GTF.value)
+        self.assertTrue(relayer["safeCreationSponsored"])
+        self.assertFalse(relayer["safeTransactionSponsored"])
+        self.assertTrue(relayer["enableTenderlySimulationBeforeRelay"])
+
+    def test_relayer_sponsoring_defaults_off(self) -> None:
+        ChainFactory.create(id=1, relayer_type=None)
+        url = reverse("v1:chains:detail", args=[1])
+
+        response = self.client.get(path=url, data=None, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        relayer = response.json()["relayer"]
+        self.assertFalse(relayer["safeCreationSponsored"])
+        self.assertFalse(relayer["safeTransactionSponsored"])
 
 
 class ChainGasPriceTests(APITestCase):
@@ -883,3 +925,55 @@ class GasTokensJsonPayloadFormatTests(APITestCase):
             result = response.json()["results"][0]
             self.assertEqual(result["address"], gas_token.address)
             self.assertEqual(result["symbol"], gas_token.symbol)
+
+
+class GasTokensOrderingTests(APITestCase):
+    def test_orders_by_priority_ascending(self) -> None:
+        chain = ChainFactory.create()
+        GasTokenFactory.create(chains=(chain,), symbol="LOW", priority=3)
+        GasTokenFactory.create(chains=(chain,), symbol="HIGH", priority=1)
+        GasTokenFactory.create(chains=(chain,), symbol="MID", priority=2)
+
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        symbols = [token["symbol"] for token in response.json()["results"]]
+        self.assertEqual(symbols, ["HIGH", "MID", "LOW"])
+
+    def test_default_priority_tokens_sorted_after_prioritised_ones_by_symbol(
+        self,
+    ) -> None:
+        chain = ChainFactory.create()
+        # Prioritised token must come first regardless of its symbol.
+        GasTokenFactory.create(chains=(chain,), symbol="ZZZ", priority=1)
+        # Tokens left at the default priority (100) keep the default symbol
+        # ordering, after the prioritised ones.
+        GasTokenFactory.create(chains=(chain,), symbol="BBB")
+        GasTokenFactory.create(chains=(chain,), symbol="AAA")
+
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        symbols = [token["symbol"] for token in response.json()["results"]]
+        self.assertEqual(symbols, ["ZZZ", "AAA", "BBB"])
+
+    def test_same_priority_and_symbol_ordered_by_id(self) -> None:
+        chain = ChainFactory.create()
+        # Same priority and symbol (e.g. bridged/pegged variants); only the
+        # address and id differ.
+        first = GasTokenFactory.create(chains=(chain,), symbol="USDC", priority=1)
+        second = GasTokenFactory.create(chains=(chain,), symbol="USDC", priority=1)
+        self.assertLess(first.id, second.id)
+
+        response = self.client.get(
+            path=reverse("v1:chains:gas-tokens-list", args=[chain.id]), format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        addresses = [token["address"] for token in response.json()["results"]]
+        # Deterministic fallback to ascending id.
+        self.assertEqual(addresses, [first.address, second.address])

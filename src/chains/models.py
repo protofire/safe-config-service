@@ -196,6 +196,35 @@ class Chain(models.Model):
         default=None,
         help_text="Relayer strategy used by the Safe Client Gateway for this chain. Leave empty for no relayer.",
     )
+    relayer_safe_creation_sponsored = models.BooleanField(
+        default=False,
+        db_default=False,
+        help_text="Sponsor/relay Safe account creation transactions. Requires a relayer type.",
+    )
+    relayer_safe_transaction_sponsored = models.BooleanField(
+        default=False,
+        db_default=False,
+        help_text="Sponsor/relay Safe transaction execution. Requires a relayer type.",
+    )
+    relayer_enable_tenderly_simulation_before_relay = models.BooleanField(
+        default=False,
+        db_default=False,
+        help_text="Enable/disable Tenderly simulation on the Safe Client Gateway when relaying a transaction on this chain.",
+    )
+
+    def clean(self) -> None:
+        if self.relayer_type is None and (
+            self.relayer_safe_creation_sponsored
+            or self.relayer_safe_transaction_sponsored
+        ):
+            msg = "Sponsoring options require a relayer type to be set."
+            raise ValidationError(
+                {
+                    "relayer_type": msg,
+                    "relayer_safe_creation_sponsored": msg,
+                    "relayer_safe_transaction_sponsored": msg,
+                }
+            )
 
     def get_disabled_wallets(self) -> QuerySet["Wallet"]:
         all_wallets = Wallet.objects.all()
@@ -292,6 +321,10 @@ class GasToken(models.Model):
         unique=True, help_text="Token contract address."
     )
     symbol = models.CharField(max_length=50)
+    priority = models.SmallIntegerField(
+        default=100,
+        help_text="A lower number indicates higher priority. Defaults to 100 (default ordering).",
+    )  # A lower number will indicate higher priority
 
     def __str__(self) -> str:
         return f"GasToken: {self.symbol} ({self.address})"
