@@ -11,7 +11,7 @@ from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
 #from dotenv import load_dotenv
 
-from chains.models import Chain, Feature as ChainFeature, Wallet
+from chains.models import Chain, Feature as ChainFeature, Wallet, Service
 from safe_apps.models import SafeApp, Tag, Feature as SafeAppFeature, validate_safe_app_icon_size
 import requests
 
@@ -34,6 +34,7 @@ class Command(BaseCommand):
         join_path = urljoin if is_url else os.path.join
 
         files = {
+            'services': join_path(config_url, 'configs/services.json'),
             'features': join_path(config_url, 'configs/features.json'),
             'wallets': join_path(config_url, 'configs/wallets.json'),
             'safe_apps': join_path(config_url, 'configs/safeApps.json'),
@@ -50,6 +51,7 @@ class Command(BaseCommand):
 
         print('Chains to import:', default_chain_ids)
         import_flags = {
+            'services': os.getenv('IMPORT_SERVICES', '0').lower() == '1',
             'features': os.getenv('IMPORT_FEATURES', '0').lower() == '1',
             'wallets': os.getenv('IMPORT_WALLETS', '0').lower() == '1',
             'safe_apps': os.getenv('IMPORT_SAFE_APPS', '0').lower() == '1',
@@ -69,6 +71,18 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Import completed successfully"))
 
+    def import_services(self, services_file: str, *args: Any) -> None:
+        try:
+            services_data = self.load_json_data(services_file)
+            for svc in services_data:
+                Service.objects.update_or_create(
+                    key=svc['key'],
+                    defaults={'name': svc['name'], 'description': svc.get('description', '')},
+                )
+            self.stdout.write(self.style.SUCCESS(f"Imported {len(services_data)} services"))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"Skipping services import: {str(e)}"))
+
     def import_features(self, features_file: str, *args: Any) -> None:
         try:
             features_data = self.load_json_data(features_file)
@@ -76,6 +90,11 @@ class Command(BaseCommand):
             new_features = [feature for feature in features_data if feature not in existing_features]
 
             ChainFeature.objects.bulk_create([ChainFeature(key=feature) for feature in new_features])
+
+            services = list(Service.objects.all())
+            if services:
+                for feature in ChainFeature.objects.all():
+                    feature.services.set(services)
 
             self.stdout.write(self.style.SUCCESS(f"Imported {len(new_features)} new features"))
         except Exception as e:
