@@ -13,6 +13,10 @@ from chains.models import Chain, Feature, GasPrice, Wallet, validate_native_curr
 
 logger = logging.getLogger(__name__)
 
+# Hardcoded for now: these are the only wallets auto-enabled on a newly imported chain
+# unless the source explicitly disables them. Everything else needs manual admin setup.
+DEFAULT_ENABLED_WALLET_KEYS = ("metamask", "walletconnect_v2")
+
 
 class Command(BaseCommand):
     help = (
@@ -304,15 +308,18 @@ class Command(BaseCommand):
     def _handle_wallets(self, chain: Chain, disabled_wallet_keys: List[str]) -> None:
         disabled_keys = set(disabled_wallet_keys)
 
+        # Any wallet explicitly disabled by the source is recorded and kept disabled for
+        # this chain, even if it's outside DEFAULT_ENABLED_WALLET_KEYS below.
         for wallet_key in disabled_keys:
             logger.info(f"Processing disabled wallet: {wallet_key} for chain: {chain.name}")
             wallet, _ = Wallet.objects.get_or_create(key=wallet_key)
             wallet.chains.remove(chain)
 
-        # Any wallet we already know about (from some other chain's disabledWallets list)
-        # that this source didn't list as disabled for this chain is treated as enabled.
-        # Note this can only ever *enable* wallets we already know about - a wallet key
-        # that's enabled on every chain, and therefore never appears in any source's
-        # disabledWallets list, can't be discovered through this endpoint shape at all.
-        for wallet in Wallet.objects.exclude(key__in=disabled_keys):
+        # Only these wallets are auto-enabled by default; every other wallet (hardware
+        # wallets, chain-specific ones, ...) requires manual setup in Django admin.
+        for wallet_key in DEFAULT_ENABLED_WALLET_KEYS:
+            if wallet_key in disabled_keys:
+                continue
+            logger.info(f"Enabling default wallet: {wallet_key} for chain: {chain.name}")
+            wallet, _ = Wallet.objects.get_or_create(key=wallet_key)
             wallet.chains.add(chain)

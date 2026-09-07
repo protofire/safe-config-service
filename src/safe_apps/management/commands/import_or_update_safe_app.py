@@ -116,6 +116,15 @@ class Command(BaseCommand):
         if chain_ids:
             app_chain_ids = chain_ids
 
+        # Additive, like tags/features/social profiles: an app imported once per network
+        # (e.g. one curated JSON file per chain) must keep accumulating chain_ids across
+        # runs rather than having each run's narrower list overwrite the previous one -
+        # otherwise an app present on every chain (Transaction Builder, CSV Airdrop, ...)
+        # would end up only ever showing the chain from the most recent import run.
+        existing_app = SafeApp.objects.filter(url=app_data['url']).first()
+        if existing_app:
+            app_chain_ids = sorted(set(existing_app.chain_ids) | set(app_chain_ids))
+
         logger.info(f"Processing safe app: {app_data['name']} (URL: {app_data['url']}, Chain IDs: {app_chain_ids})")
         safe_app, created = SafeApp.objects.update_or_create(
             url=app_data['url'],

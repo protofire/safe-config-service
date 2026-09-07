@@ -54,6 +54,20 @@ class ImportOrUpdateSafeAppCommandTests(TestCase):
         )
 
     @responses.activate
+    def test_chain_ids_accumulate_across_separate_runs_instead_of_being_overwritten(self) -> None:
+        # Simulates an app present on every chain (Transaction Builder, CSV Airdrop, ...)
+        # imported once per network, via one curated JSON file per chain, in separate runs.
+        responses.add(responses.GET, SOURCE_A, json=[_app_payload(chainIds=[1])], status=200)
+        call_command("import_or_update_safe_app", "--remote-url", SOURCE_A)
+        responses.reset()
+
+        responses.add(responses.GET, SOURCE_A, json=[_app_payload(chainIds=[137])], status=200)
+        call_command("import_or_update_safe_app", "--remote-url", SOURCE_A)
+
+        safe_app = SafeApp.objects.get(url="https://app.example.com")
+        self.assertEqual(list(safe_app.chain_ids), [1, 137])
+
+    @responses.activate
     def test_merges_distinct_apps_from_multiple_sources_in_one_run(self) -> None:
         responses.add(
             responses.GET,

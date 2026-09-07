@@ -160,27 +160,31 @@ class ImportChainCommandTests(TestCase):
         self.assertTrue(Feature.objects.filter(key="EIP1559").exists())
 
     @responses.activate
-    def test_disabled_wallets_are_not_enabled_and_unmentioned_wallets_are(self) -> None:
+    def test_only_default_wallets_are_auto_enabled(self) -> None:
         other_chain = ChainFactory.create(id=99)
-        disabled_wallet = WalletFactory.create(key="walletDisabled", chains=(other_chain,))
-        enabled_wallet = WalletFactory.create(key="walletEnabled", chains=())
+        # A wallet outside the hardcoded default set: never auto-enabled, even if the
+        # source doesn't disable it.
+        unrelated_wallet = WalletFactory.create(key="ledger", chains=(other_chain,))
 
         responses.add(
             responses.GET,
             SOURCE_A,
-            json=[_chain_payload(disabledWallets=["walletDisabled"])],
+            json=[_chain_payload(disabledWallets=["walletconnect_v2"])],
             status=200,
         )
 
         call_command("import_chain", "--remote-url", SOURCE_A)
 
         chain = Chain.objects.get(id=1)
-        disabled_wallet.refresh_from_db()
-        enabled_wallet.refresh_from_db()
-        self.assertNotIn(chain, disabled_wallet.chains.all())
-        self.assertIn(chain, enabled_wallet.chains.all())
-        # Untouched: walletDisabled's membership on the unrelated chain is preserved.
-        self.assertIn(other_chain, disabled_wallet.chains.all())
+        metamask = Wallet.objects.get(key="metamask")
+        walletconnect = Wallet.objects.get(key="walletconnect_v2")
+        unrelated_wallet.refresh_from_db()
+
+        self.assertIn(chain, metamask.chains.all())
+        self.assertNotIn(chain, walletconnect.chains.all())
+        self.assertNotIn(chain, unrelated_wallet.chains.all())
+        # Untouched: ledger's membership on the unrelated chain is preserved.
+        self.assertIn(other_chain, unrelated_wallet.chains.all())
 
     @responses.activate
     def test_malformed_entry_missing_required_field_is_skipped(self) -> None:
