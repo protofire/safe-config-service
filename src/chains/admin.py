@@ -27,6 +27,7 @@ class ChainAdmin(admin.ModelAdmin[Chain]):
     list_display = (
         "id",
         "name",
+        "listed",
         "rpc_uri",
         "safe_apps_rpc_uri",
         "relevance",
@@ -37,6 +38,10 @@ class ChainAdmin(admin.ModelAdmin[Chain]):
         "name",
     )
     inlines = [FeatureInline, GasPriceInline, WalletInline]
+
+    @admin.display(boolean=True, description="Listed")
+    def listed(self, obj: Chain) -> bool:
+        return not obj.hidden
 
 
 @admin.register(GasPrice)
