@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from safe_eth.eth.django.models import EthereumAddressBinaryField, Uint256Field
 
@@ -26,7 +26,9 @@ class RelayChain(models.Model):
     relayer_id = models.CharField(
         max_length=64,
         unique=True,
-        help_text="OpenZeppelin Relayer id of this chain's relayer, e.g. <em>base-sepolia</em>. "
+        validators=[RegexValidator(r"^[A-Za-z0-9_-]{1,64}\Z")],
+        help_text="OpenZeppelin Relayer id of this chain's relayer, e.g. <em>base-sepolia</em> "
+        "(letters, digits, - and _). "
         "A relayer of another network sends this chain's transactions to the wrong network.",
     )
     native_usd_price = models.DecimalField(

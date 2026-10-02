@@ -85,6 +85,22 @@ class RelayChainCleanTestCase(TestCase):
 
         self.assertIn("relayer_id", context.exception.message_dict)
 
+    def test_relayer_id_format(self) -> None:
+        for relayer_id in ("base.sepolia", "a b", "base-sepolia\n"):
+            with self.subTest(relayer_id=relayer_id):
+                relay_chain = RelayChainFactory.build(
+                    chain=ChainFactory.create(), relayer_id=relayer_id
+                )
+
+                with self.assertRaises(ValidationError) as context:
+                    relay_chain.full_clean()
+
+                self.assertIn("relayer_id", context.exception.message_dict)
+
+        RelayChainFactory.build(
+            chain=ChainFactory.create(), relayer_id="base-sepolia"
+        ).full_clean()
+
     def test_str(self) -> None:
         relay_chain = RelayChainFactory.create(relayer_id="base-sepolia")
 
