@@ -7,6 +7,7 @@ from django.urls import reverse
 from chains.tests.factories import ChainFactory
 
 from ..models import ZERO_ADDRESS, RelayChain, RelayFeeToken
+from .factories import RelayChainFactory
 
 USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
 
@@ -82,3 +83,16 @@ class RelayChainAdminTestCase(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(RelayFeeToken.objects.count(), 0)
+
+    def test_change_chain_on_edit_does_not_copy_the_row(self) -> None:
+        # chain is the primary key: a new value would INSERT a second row
+        relay_chain = RelayChainFactory.create()
+        other_chain = ChainFactory.create()
+        url = reverse("admin:relay_relaychain_change", args=[relay_chain.pk])
+
+        response = self.client.post(url, form_data(str(other_chain.id), []))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            list(RelayChain.objects.values_list("pk", flat=True)), [relay_chain.pk]
+        )
