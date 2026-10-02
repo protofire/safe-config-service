@@ -133,3 +133,24 @@ class RelayChainViewTests(APITestCase):
         body = self.client.get(detail_url(relay_chain.chain_id)).json()
 
         self.assertEqual([t["symbol"] for t in body["tokens"]], ["USDC"])
+
+
+class RelayChainSchemaTests(APITestCase):
+    def test_swagger_schema_matches_contract(self) -> None:
+        schema = self.client.get(reverse("schema-json", args=[".json"])).json()
+        relay_chain = schema["definitions"]["RelayChain"]
+        tokens = relay_chain["properties"]["tokens"]
+
+        self.assertEqual(set(relay_chain["properties"]), set(CONTRACT))
+        self.assertEqual(tokens["type"], "array")
+        self.assertEqual(
+            set(schema["definitions"]["RelayFeeToken"]["properties"]),
+            set(CONTRACT["tokens"][0]),
+        )
+        for key in (
+            "refundReceiver",
+            "payFromSafeDailyBudgetWei",
+            "sponsoringDailyBudgetWei",
+        ):
+            with self.subTest(key=key):
+                self.assertTrue(relay_chain["properties"][key].get("x-nullable"))

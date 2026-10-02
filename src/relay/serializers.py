@@ -17,10 +17,10 @@ class RelayFeeTokenSerializer(serializers.ModelSerializer[RelayFeeToken]):
 
 
 class RelayChainSerializer(serializers.ModelSerializer[RelayChain]):
-    refund_receiver = EthereumAddressField()
+    refund_receiver = EthereumAddressField(allow_null=True)
     # Wei values exceed 2^53: strings, as chains/serializers.py does for gas prices
-    pay_from_safe_daily_budget_wei = serializers.CharField()
-    sponsoring_daily_budget_wei = serializers.CharField()
+    pay_from_safe_daily_budget_wei = serializers.CharField(allow_null=True)
+    sponsoring_daily_budget_wei = serializers.CharField(allow_null=True)
     tokens = serializers.SerializerMethodField()
 
     class Meta:
@@ -37,7 +37,7 @@ class RelayChainSerializer(serializers.ModelSerializer[RelayChain]):
             "tokens",
         ]
 
-    @swagger_serializer_method(serializer_or_field=RelayFeeTokenSerializer)  # type: ignore[untyped-decorator]
+    @swagger_serializer_method(serializer_or_field=RelayFeeTokenSerializer(many=True))  # type: ignore[untyped-decorator]
     def get_tokens(self, instance: RelayChain) -> ReturnDict[Any, Any]:
         # Sorted in Python so the prefetched rows are reused
         tokens = sorted(instance.tokens.all(), key=lambda token: token.symbol)
