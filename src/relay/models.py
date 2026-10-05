@@ -42,7 +42,10 @@ class RelayChain(models.Model):
     refund_receiver = EthereumAddressBinaryField(
         null=True,
         blank=True,
-        help_text="Treasury address (checksummed) that receives the Pay from Safe fee refunds.",
+        help_text="Treasury address (checksummed) that receives the Pay from Safe fee refunds. "
+        "Must be an EOA (no contract code) if the native coin is a fee token: the Safe refunds "
+        "the native coin with a 2300-gas send, which a contract such as a Safe cannot receive, "
+        "so the transaction reverts with GS011. Token refunds work with any receiver.",
     )
     pay_from_safe_daily_budget_wei = Uint256Field(
         null=True,
@@ -96,7 +99,8 @@ class RelayFeeToken(models.Model):
         RelayChain, on_delete=models.CASCADE, related_name="tokens"
     )
     address = EthereumAddressBinaryField(
-        help_text=f"Token contract address, checksummed. {ZERO_ADDRESS} = the chain's native coin."
+        help_text=f"Token contract address, checksummed. {ZERO_ADDRESS} = the chain's native coin; "
+        "list it only when the refund receiver is an EOA."
     )
     symbol = models.CharField(max_length=32)
     decimals = models.PositiveSmallIntegerField()
