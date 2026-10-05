@@ -17,6 +17,7 @@ urlpatterns_v1 = [
     path("about/", include("about.urls", namespace="about")),
     path("safe-apps/", include("safe_apps.urls", namespace="safe-apps")),
     path("chains/", include("chains.urls", namespace="chains")),
+    path("relay/chains/", include("relay.urls", namespace="relay")),
 ]
 
 urlpatterns = [
