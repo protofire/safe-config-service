@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "about.apps.AboutAppConfig",
     "chains.apps.AppsConfig",
     "safe_apps.apps.AppsConfig",
+    "relay.apps.AppsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
